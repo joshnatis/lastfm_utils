@@ -37,7 +37,7 @@ def main():
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument("-d", "--date", action="store_true", help="display tracks organized by year and month")
-	parser.add_argument("-j", "--json", action="store_true", help="display output in json format)")
+	parser.add_argument("-j", "--json", action="store_true", help="display output in json format")
 	parser.add_argument("-w", "--width", type=int, default=4, help="tab width for display")
 	parser.add_argument("-u", "--user", type=str, default="anexto5", help="lastfm username", required=True)
 	args = parser.parse_args()
