@@ -10,18 +10,18 @@ Utilities for communicating with Last.fm
 #                      - or just hardcode the API key into the variable
 #                      - https://www.last.fm/api/account/create
 #
-#  Usage         : ./lastfm_history -u USER
+#  Usage         : ./lastfm_history -u USRN
 #  Dependencies  : python3
 #---------------------------------------------------------------------------
 ```
 ```
-usage: lastfm_history [-h] [-d] [-j] [-w WIDTH] -u USER
+usage: lastfm_history [-h] [-d] [-j] [-w W] [-l L] -u USRN
 
 optional arguments:
   -h, --help            show this help message and exit
   -d, --date            display tracks organized by year and month
-  -j, --json            display output in json format
-  -w WIDTH, --width WIDTH
-                        tab width for display
-  -u USER, --user USER  lastfm username
+  -j, --json            display output in json format)
+  -w W, --width W       tab width for display
+  -l L, --limit L       limit the number of songs
+  -u USRN, --user USRN  lastfm username
 ```
