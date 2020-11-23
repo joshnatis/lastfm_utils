@@ -1,6 +1,8 @@
 # lastfm_utils
 Utilities for communicating with Last.fm
 
+*Note: if you want the output in a file, use output redirection: `./example > file.txt`*
+
 ### lastfm_history
 ```
 #---------------------------------------------------------------------------
