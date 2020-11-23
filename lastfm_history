@@ -1,0 +1,189 @@
+#!/usr/bin/env python3
+
+#---------------------------------------------------------------------------
+#  Title         : lastfm_history
+#  Author        : Josh Natis
+#  Description   : Get a user's listening history from Last.fm
+#  Repository    : https://github.com/joshnatis/lastfm_utils
+#  Setup         : chmod +x lastfm_history
+#                  export LASTFM_API_KEY=xxxxxxx
+#                      - or just hardcode the API key into the variable
+#                      - https://www.last.fm/api/account/create
+#
+#  Usage         : ./lastfm_history
+#---------------------------------------------------------------------------
+
+import requests
+import json
+import time
+import sys
+import os
+import argparse
+from collections import defaultdict
+
+LASTFM_API_KEY = os.environ.get('LASTFM_API_KEY')
+USER_AGENT = 'curl/7.54.0' # why not lmfao
+USERNAME = ''
+DISPLAY_JSON = False
+DISPLAY_DATE = False
+TAB_WIDTH = 4
+
+def main():
+	if LASTFM_API_KEY == None:
+		sys.stderr.write("You're missing an API key!\
+		\nEither run 'export LASTFM_API_KEY=xxxx' or hardcode it within the program.\
+		\nYou can get an API key from https://www.last.fm/api/account/create.\n")
+		exit()
+
+	parser = argparse.ArgumentParser()
+	parser.add_argument("-d", "--date", action="store_true", help="display tracks organized by year and month")
+	parser.add_argument("-j", "--json", action="store_true", help="display output in json format)")
+	parser.add_argument("-w", "--width", type=int, default=4, help="tab width for display")
+	parser.add_argument("-u", "--user", type=str, default="anexto5", help="lastfm username", required=True)
+	args = parser.parse_args()
+
+	global USERNAME
+	global DISPLAY_JSON
+	global DISPLAY_DATE
+	global TAB_WIDTH
+
+	DISPLAY_JSON = args.json
+	DISPLAY_DATE= args.date
+	TAB_WIDTH= args.width
+	USERNAME = args.user
+
+	if DISPLAY_JSON and not DISPLAY_DATE:
+		sys.stderr.write("Only the --date output can be in JSON form.\
+		\nUse -dj, or just don't use -j\n")
+		exit()
+
+	if DISPLAY_DATE:
+		lastfm_date_history()
+	else:
+		lastfm_history()
+
+#  _    _ ______ _      _____  ______ _____   _____
+# | |  | |  ____| |    |  __ \|  ____|  __ \ / ____|
+# | |__| | |__  | |    | |__) | |__  | |__) | (___
+# |  __  |  __| | |    |  ___/|  __| |  _  / \___ \
+# | |  | | |____| |____| |    | |____| | \ \ ____) |
+# |_|  |_|______|______|_|    |______|_|  \_\_____/
+
+
+def lastfm_get(payload):
+	headers = {'user-agent': USER_AGENT}
+	url = 'http://ws.audioscrobbler.com/2.0/'
+
+	payload['api_key'] = LASTFM_API_KEY
+	payload['user'] = USERNAME
+	payload['format'] = 'json'
+
+	response = requests.get(url, headers=headers, params=payload)
+
+	if response.status_code != 200:
+		raise Exception("ERROR:", response.status_code)
+
+	return response
+
+# 27 Oct 2020, 18:53 --> [Oct, 2020]
+def parseDate(date):
+	date = date.split(' ')
+	return (date[1], date[2][:-1])
+
+# {year : {month: {artist : []}}}
+def print_scrobbles(scrobbles):
+	for year in scrobbles:
+		print(year)
+		for month in scrobbles[year]:
+			print(" " * TAB_WIDTH, month)
+			for artist in scrobbles[year][month]:
+				print(" " * TAB_WIDTH * 2, artist)
+				for title in scrobbles[year][month][artist]:
+					print(" " * TAB_WIDTH * 3, title)
+
+# thanks eusoubrasileiro, https://stackoverflow.com/a/34482761
+def progressbar(it, prefix="", size=60, file=sys.stderr):
+	count = len(it)
+	def show(j):
+		x = int(size*j/count)
+		file.write("%s[%s%s] %i/%i\r" % (prefix, "#"*x, "."*(size-x), j, count))
+		file.flush()
+	show(0)
+	for i, item in enumerate(it):
+		yield item
+		show(i+1)
+	file.write("\n")
+	file.flush()
+
+#           _____ _____
+#     /\   |  __ \_   _|
+#    /  \  | |__) || |
+#   / /\ \ |  ___/ | |
+#  / ____ \| |    _| |_
+# /_/    \_\_|   |_____|
+
+def lastfm_history():
+	num_pages = int(lastfm_get({
+		'method': 'user.getrecenttracks',
+		}).json()["recenttracks"]["@attr"]["totalPages"])
+
+	for page in range(1, num_pages + 1):
+		try:
+			json_results = lastfm_get({
+				'method': 'user.getrecenttracks',
+				'page': page
+			}).json()
+		except:
+			break
+		tracks = json_results["recenttracks"]["track"]
+		for track in tracks:
+			print(track["artist"]["#text"], "-", track["name"])
+
+def lastfm_date_history():
+	scrobbles = defaultdict(lambda: defaultdict(dict))
+
+	num_pages = int(lastfm_get({
+		'method': 'user.getrecenttracks',
+		}).json()["recenttracks"]["@attr"]["totalPages"])
+
+	sleep = 0 if num_pages < 10 else 1
+	for page in progressbar(range(1, num_pages + 1), "Scraping Pages: ", 50):
+		try:
+			json_results = lastfm_get({
+				'method': 'user.getrecenttracks',
+				'page': page
+			}).json()
+		except: # unable to fetch content, write what we have and exit
+			break
+
+		tracks = json_results["recenttracks"]["track"]
+
+		if "@attr" in tracks[0]: #skip now-playing
+			tracks = tracks[1:]
+
+		for track in tracks:
+			artist = track["artist"]["#text"]
+			title = track["name"]
+			month, year = parseDate(track["date"]["#text"])
+
+			if artist not in scrobbles[year][month]:
+				scrobbles[year][month][artist] = []
+			scrobbles[year][month][artist].append(title)
+
+			time.sleep(sleep)
+			if page % 50 == 0:
+				sleep += 2
+				print("Incrementing sleep! REMOVE ME")
+
+	if DISPLAY_JSON:
+		print(json.dumps(scrobbles, ensure_ascii=False).encode('utf-8').decode())
+	else:
+		print_scrobbles(scrobbles)
+try:
+	main()
+except KeyboardInterrupt:
+	sys.stderr.write("\n")
+	exit()
+except Exception as e:
+	sys.stderr.write(str(e) + "\nIs your API key invalid?\
+		\nOr, perhaps we're querying Last.fm too frequently -- take a break.\n")
