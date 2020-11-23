@@ -7,7 +7,7 @@ Utilities for communicating with Last.fm
 #  Description   : Get a user's listening history from Last.fm
 #  Setup         : chmod +x lastfm_history
 #                  export LASTFM_API_KEY=xxxxxxx
-#                      - or just hardcode the API key into the variable
+#                      - or just hardcode the API key into the program
 #                      - https://www.last.fm/api/account/create
 #
 #  Usage         : ./lastfm_history -u USRN
