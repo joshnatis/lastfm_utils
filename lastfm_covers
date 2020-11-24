@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+
+#---------------------------------------------------------------------------
+#  Title         : lastfm_covers
+#  Author        : Josh Natis
+#  Description   : Generate an HTML file with album art for a user's tracks
+#  Repository    : https://github.com/joshnatis/lastfm_utils
+#  Setup         : chmod +x lastfm_covers
+#                  export LASTFM_API_KEY=xxxxxxx
+#                      - or just hardcode the API key into the program
+#                      - https://www.last.fm/api/account/create
+#
+#  Usage         : ./lastfm_covers
+#  Dependencies  : requests (https://requests.readthedocs.io/en/master/)
+#---------------------------------------------------------------------------
+
+import requests
+import json
+import sys
+import os
+import argparse
+import time
+
+LASTFM_API_KEY = os.environ.get('LASTFM_API_KEY')
+USER_AGENT = 'curl/7.54.0' # why not lmfao
+
+def main():
+	args = parse_arguments()
+	images = scrape_covers(args)
+	if args.nohtml:
+		print(*images)
+	else:
+		generate_html(images)
+
+#  _    _ ______ _      _____  ______ _____   _____
+# | |  | |  ____| |    |  __ \|  ____|  __ \ / ____|
+# | |__| | |__  | |    | |__) | |__  | |__) | (___
+# |  __  |  __| | |    |  ___/|  __| |  _  / \___ \
+# | |  | | |____| |____| |    | |____| | \ \ ____) |
+# |_|  |_|______|______|_|    |______|_|  \_\_____/
+
+def parse_arguments():
+	if LASTFM_API_KEY == None:
+		sys.stderr.write("You're missing an API key!\
+		\nEither run 'export LASTFM_API_KEY=xxxx' or hardcode it within the program.\
+		\nYou can get an API key from https://www.last.fm/api/account/create.\n")
+		exit()
+
+	parser = argparse.ArgumentParser()
+	parser.add_argument("-t", "--top", action="store_true", help="display top tracks (rather than recent)")
+	parser.add_argument("-n", "--nohtml", action="store_true", help="display image URLs in plaintext")
+	parser.add_argument("-l", "--limit", type=int, metavar='L', default=float("inf"), help="limit the number of tracks")
+	parser.add_argument("-s", "--size", type=str, metavar='S', default='L', help="size of each image (S, M, L, XL)")
+	parser.add_argument("-u", "--user", type=str, metavar='USRN', help="lastfm username", required=True)
+	args = parser.parse_args()
+	return args
+
+# thanks eusoubrasileiro, https://stackoverflow.com/a/34482761
+def progressbar(it, prefix="", width=60, file=sys.stderr):
+	count = len(it)
+	def show(j):
+		x = int(width*j/count)
+		file.write("%s[%s%s] %i/%i\r" % (prefix, "#"*x, "."*(width-x), j, count))
+		file.flush()
+	show(0)
+	for i, item in enumerate(it):
+		yield item
+		show(i+1)
+	file.write("\n")
+	file.flush()
+
+def lastfm_get(username, payload):
+	headers = {'user-agent': USER_AGENT}
+	url = 'http://ws.audioscrobbler.com/2.0/'
+
+	payload['api_key'] = LASTFM_API_KEY
+	payload['user'] = username
+	payload['format'] = 'json'
+
+	response = requests.get(url, headers=headers, params=payload)
+	assert response.status_code == 200, "ERROR: " + str(response.status_code)
+	return response.json()
+
+def generate_html(images):
+	sys.stderr.write("\n")
+	print('<!DOCTYPE html>')
+	print('<html lang="en">')
+	print('\n<head>')
+	print('\t<title>Last.fm Covers</title>')
+	print('\t<meta charset="utf-8"/>')
+	print('\t<meta name="viewport" content="width=device-width, initial-scale=1"/>')
+	print('\t<style>body{text-align:center; background-color:black;}img{border:1px solid white;}</style>')
+	print('</head>')
+	print('\n<body>')
+	for img in images:
+		print("\t<img src=\"", img, "\" alt=\"\">")
+	print("</body>")
+	print("</html>")
+
+#           _____ _____
+#     /\   |  __ \_   _|
+#    /  \  | |__) || |
+#   / /\ \ |  ___/ | |
+#  / ____ \| |    _| |_
+# /_/    \_\_|   |_____|
+
+def scrape_covers(args):
+	images_list = []
+
+	method = "recenttracks" if not args.top else "toptracks"
+	artist_label = "#text" if not args.top else "name"
+	image_size = {'S':0,'M':1,'L':2,'XL':3}[args.size]
+	page_size = args.limit % 200
+
+	class LimitReached(Exception): pass
+
+	try:
+		num_pages = int(lastfm_get(args.user, {
+			'method': "user.get" + method
+		})[method]["@attr"]["totalPages"])
+
+		n = 0
+
+		for page in range(1, num_pages + 1):
+			try:
+				tracks = lastfm_get(args.user, {
+					'method': "user.get" + method,
+					'page': page,
+					'limit': page_size
+				})[method]["track"]
+			except:
+				return unique(images_list)
+
+			for track in progressbar(tracks, prefix="Munching: ", width=50):
+				
+				if n >= args.limit:
+					raise LimitReached
+
+				artist = track["artist"][artist_label]
+				title = track["name"]
+
+				track_info = lastfm_get(args.user, {
+					'method': 'track.getInfo',
+					'track': title,
+					'artist': artist
+				})
+
+				if "album" in track_info["track"]:
+					img = track_info['track']['album']['image'][image_size]["#text"]
+					if img != '' and img not in images_list:
+						images_list.append(img)
+						n += 1
+				else:
+					search = lastfm_get(args.user, {
+						'method': 'track.search',
+						'track': title,
+						'artist': artist,
+						'limit' : 5
+					})["results"]["trackmatches"]
+						
+					for item in search["track"]:
+						if "image" in item:
+							img = item["image"][image_size]["#text"]
+							if img != '' and img not in images_list:
+								images_list.append(img)
+								n += 1
+								break
+
+				if n % 100 == 0:
+					time.sleep(1)
+
+	except KeyboardInterrupt:
+		sys.stderr.write("\n")
+	except AssertionError as e:
+		sys.stderr.write(str(e) + "\nIs your API key invalid?\
+		\nOr, perhaps we're querying Last.fm too frequently -- take a break.\n")
+	except LimitReached: pass
+
+	return images_list
+
+main()
