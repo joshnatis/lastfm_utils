@@ -129,7 +129,7 @@ def scrape_covers(args):
 					'limit': page_size
 				})[method]["track"]
 			except:
-				return unique(images_list)
+				return images_list
 
 			for track in progressbar(tracks, prefix="Munching: ", width=50):
 				
