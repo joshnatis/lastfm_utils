@@ -17,12 +17,13 @@ Utilities for communicating with Last.fm
 #---------------------------------------------------------------------------
 ```
 ```
-usage: lastfm_history [-h] [-d] [-j] [-w W] [-l L] -u USRN
+usage: lastfm_history [-h] [-d] [-p] [-t] [-w W] [-l L] -u USRN
 
 optional arguments:
   -h, --help            show this help message and exit
-  -d, --date            display tracks organized by year and month
-  -j, --json            display output in json format)
+  -d, --date            display tracks organized by date in JSON format
+  -p, --plaintext       display date output in plaintext
+  -t, --top             display top tracks (rather than recent)
   -w W, --width W       tab width for display
   -l L, --limit L       limit the number of songs
   -u USRN, --user USRN  lastfm username
